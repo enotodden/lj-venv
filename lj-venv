@@ -64,7 +64,7 @@ luajit_full_version(){
 
 
 install_luarocks(){
-	LUAROCKS_CLONEDIR=/tmp/tvenv-luarocks
+	LUAROCKS_CLONEDIR=/tmp/ljenv-luarocks
 	LUAROCKS_SRCDIR="$ENVDIR/src/luarocks"
 
 	if [ ! -d $LUAROCKS_CLONEDIR ]; then
@@ -89,7 +89,7 @@ install_luarocks(){
 
 
 install_luajit(){
-    LUAJIT_CLONEDIR="/tmp/tvenv-luajit-$LUAJIT_GITVERSION"
+    LUAJIT_CLONEDIR="/tmp/ljenv-luajit-$LUAJIT_GITVERSION"
 	LUAJIT_SRCDIR="$ENVDIR/src/luajit-$LUAJIT_GITVERSION"
 
 	if [ ! -d $LUAJIT_CLONEDIR ]; then
@@ -146,7 +146,7 @@ else
 
 	export LJ_VENV_OLD_PROMPT="$PS1";
 	if [ -z "$LJ_VENV_DISABLE_PROMPT" ]; then
-		export PS1="tvenv -> $PS1";
+		export PS1="ljenv -> $PS1";
 	fi
 fi
     ' > $ENVDIR/bin/activate
