@@ -2,14 +2,44 @@
 
 # lj-venv
 # =================
-# A script to install LuaJIT + LuaRocks in a self contained directory #
-# A 'fork' of my turbo-virtual-env script, without the turbo-specific stuff
 
-# I know it's corny that this is a shell script and not written in Lua,
-# but the upside is that the user won't have to have Lua or LuaJIT
-# installed already.
+# This script installs LuaJIT + LuaRocks in a self contained directory. It is
+# originally a 'fork' of my turbo-virtual-env script. It has been updated to
+# work with a more general naming scheme for versions of the JIT, including
+# modified versions which expose a different user language. These updates are
+# not yet robust and there is no testing coverage yet as of 2017/10/16.
+
+# This version has been modified for use at WINDGO Inc. The modifications
+# include
+
+#  - An additional option -v|--version whereby the git branch to follow is
+#    specified. For example passing --version 2.0 will result in the invocation
+#    of git checkout v2.0.
+#  - The default argument to the version option has been set to 2.1, because
+#    the features incorporated with the beta in LuaJIT 2.1 are highly useful to
+#    our work.
+#  - The "declaration of corniness" due to this script's delivery in the bash
+#    language has been removed, as there is nothing corny about using a lesser
+#    set of common dependencies in a bootstrap procedure.  This utility should
+#    NOT be written in Lua.
+#  - Corrections made to include directory and binary name for arbitrary
+#    branches. A match is done against the result of 'ls *jit*' using 'find'
+#    executed with shell aliases discarded to enforce consistent results across
+#    differing shell configurations.
+#      NOTE: In a venv with multiple versions of LuaJIT, this will return an
+#      incorrect result, but doing this would violate the express purpose of
+#      development from within a virtual environment.
+
+# TODO Handle incompatible GITVERSION and VERSION_CHECKOUT combinations with an
+# explicit error.
+
+# TODO Fix the missing shell quotes around variables, as this is generally
+# sloppy practice and leads to frustrating errors when pathnames contain
+# spaces.
 
 LUAJIT_GITVERSION="2.0"
+LUAJIT_VERSION_CHECKOUT="2.1"
+LUAJIT_VERSION_BINARY="luajit"
 LUAJIT_GIT_URL="http://luajit.org/git/luajit-$LUAJIT_GITVERSION.git"
 LUAROCKS_GIT_URL="https://github.com/keplerproject/luarocks.git"
 MAKE="make -j`getconf _NPROCESSORS_ONLN`"
@@ -79,7 +109,7 @@ install_luarocks(){
 	cp -rvf $LUAROCKS_CLONEDIR/* $LUAROCKS_SRCDIR/
 
 	log "Building LuaRocks"
-    $LUAROCKS_SRCDIR/configure --prefix=$ENVDIR --force-config --with-lua=$ENVDIR --with-lua-include=$ENVDIR/include/luajit-$LUAJIT_GITVERSION
+    $LUAROCKS_SRCDIR/configure --prefix=$ENVDIR --force-config --with-lua=$ENVDIR --with-lua-include=$ENVDIR/include/luajit-$LUAJIT_VERSION_CHECKOUT
     mv config.unix $LUAROCKS_SRCDIR
     $MAKE -C $LUAROCKS_SRCDIR build
 
@@ -99,16 +129,37 @@ install_luajit(){
 		log "Found LuaJIT in $LUAJIT_CLONEDIR, not cloning repo."
 	fi
 
+  # 2017/10/16 - William Whitacre BEGIN
+  pushd "$LUAJIT_CLONEDIR"
+  log "Entered $LUAJIT_CLONEDIR."
+
+  log "Switching to branch "\'"$LUAJIT_VERSION_CHECKOUT"\'"."
+  git checkout v"$LUAJIT_VERSION_CHECKOUT"
+
+  log "Ensuring up-to-date with remote."
+  git pull origin master
+  
+  popd
+  log "Returned to `pwd`."
+  # 2017/10/16 - William Whitacre END
+
 	log "Copying files"
 	mkdir -p $LUAJIT_SRCDIR
 	cp -rvf $LUAJIT_CLONEDIR/* $LUAJIT_SRCDIR
 
 	log "Building LuaJIT"
-    $MAKE -C $LUAJIT_SRCDIR PREFIX=$ENVDIR
+  $MAKE -C $LUAJIT_SRCDIR PREFIX=$ENVDIR
 
-    log "Installing LuaJIT to $ENVDIR"
-    $MAKE -C $LUAJIT_SRCDIR install PREFIX=$ENVDIR
-    ln -sf $ENVDIR/bin/luajit-`luajit_full_version` $ENVDIR/bin/lua
+  log "Installing LuaJIT to $ENVDIR"
+  $MAKE -C $LUAJIT_SRCDIR install PREFIX=$ENVDIR
+
+  # 2017/10/16 - William Whitacre - This one liner will recognize binaries
+  # which are non-conforming to the downstream versioning scheme, which is
+  # required to obtain correct results when using a beta release, as well as
+  # in the case that one uses a custom build which is deliberately renamed
+  # in order to avoid conflicts or confusion with the mainline downstream.
+  LUAJIT_BINNAME=`(cd "$ENVDIR/bin"; for f in $(\ls *jit*) ; do /usr/bin/test -x $f -a ! -d $f && echo $f ; done)`
+  ln -sf "$ENVDIR/bin/$LUAJIT_BINNAME" "$ENVDIR/bin/lua"
 }
 
 install_luarocks_requirements() {
@@ -193,6 +244,9 @@ while true; do
             shift;;
         -r|--luarocks-requirements)
             LUAROCKS_REQUIREMENTS_FILE=`readlink -f "$2"`
+            shift 2;;
+        -v|--version)
+            LUAROCKS_VERSION_CHECKOUT="$2"
             shift 2;;
         -c|--create)
             ENVDIR=`readlink -f "$2"`
